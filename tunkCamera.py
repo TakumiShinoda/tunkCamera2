@@ -3,6 +3,8 @@ import cv2
 import RPi.GPIO as GPIO
 import time
 import os
+import glob
+import random
 
 forwardPinR = 27
 forwardPinL = 23
@@ -12,9 +14,12 @@ backPinL = 24
 projectPath = os.path.abspath(os.path.dirname(__file__))
 cascade_path = projectPath + "/xml/cascade.xml"
 cascade = cv2.CascadeClassifier(cascade_path)
+musicFiles = glob.glob(projectPath + "/music/*")
 color = (255, 255, 255)
 cap = cv2.VideoCapture(0)
+
 minsize = 80
+turn_time = 3
 
 def setupGPIO():
     GPIO.setmode(GPIO.BCM)
@@ -27,8 +32,10 @@ def display(frame):
     cv2.imshow("frame",frame)
 
 def playMusic():
+    random.shuffle(musicFiles)
+    musicPath = musicFiles[0]
     pygame.mixer.init()
-    pygame.mixer.music.load(projectPath + "/music/dog.mp3")
+    pygame.mixer.music.load(musicPath)
     pygame.mixer.music.play(1)
     time.sleep(3)
     pygame.mixer.music.stop()
@@ -36,14 +43,14 @@ def playMusic():
 def goRight():
     GPIO.output(forwardPinR, True)
     GPIO.output(backPinL, True)
-    time.sleep(1)
+    time.sleep(turn_time)
     GPIO.output(forwardPinR, False)
     GPIO.output(backPinL, False)
 
 def goLeft():
     GPIO.output(forwardPinL, True)
     GPIO.output(backPinR, True)
-    time.sleep(1)
+    time.sleep(turn_time)
     GPIO.output(forwardPinL, False)
     GPIO.output(backPinR, False)
 
