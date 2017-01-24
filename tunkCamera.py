@@ -1,6 +1,7 @@
 import pygame.mixer
 import cv2
 import RPi.GPIO as GPIO
+import numpy as np
 import time
 import os
 import glob
@@ -12,14 +13,14 @@ backPinR = 17
 backPinL = 24
 
 projectPath = os.path.abspath(os.path.dirname(__file__))
-cascade_path = projectPath + "/xml/cascade.xml"
-cascade = cv2.CascadeClassifier(cascade_path)
+cascade = cv2.CascadeClassifier(projectPath + "/xml/cascade.xml")
 musicFiles = glob.glob(projectPath + "/music/*")
-color = (255, 255, 255)
-cap = cv2.VideoCapture(0)
 
-minsize = 80
 turn_time = 3
+frame_degree = 4
+accuracy = 4
+lower = np.array([0,50,50])
+upper = np.array([15,255,255])
 
 def setupGPIO():
     GPIO.setmode(GPIO.BCM)
@@ -54,55 +55,61 @@ def goLeft():
     GPIO.output(forwardPinL, False)
     GPIO.output(backPinR, False)
 
-def colorDetect(rect,frame):
-    detectedRect = []
-    
-    for colorRect in rect:
-        cx = colorRect[0] + (colorRect[2] / 2)
-        cy = colorRect[1] + (colorRect[2] / 2)
-        frameSmooth = cv2.medianBlur(frame,7);
-        frameHSV = cv2.cvtColor(frameSmooth,cv2.cv.CV_BGR2HSV)
-        h = frameHSV[cy][cx][0]
-        s = frameHSV[cy][cx][1]
-        v = frameHSV[cy][cx][2]
+def frame_init():
+    cap = cv2.VideoCapture(0)
+    i = 0
 
-        if h >= 15 and s >= 50 and s <= 255 and v >= 50 and v <= 255:
-            detectedRect.append([colorRect[0],colorRect[1],colorRect[2],colorRect[3]])
-
-    return detectedRect
-
-def detection():
-    while True:
-        left = 0
-        right = 0
-        lastRect = []
+    while i < 10:
         ret,frame = cap.read()
-        image_gray = cv2.cvtColor(frame, cv2.cv.CV_BGR2GRAY)
-        rect = cascade.detectMultiScale(image_gray, scaleFactor=1.1, minNeighbors=3, minSize=(minsize,minsize))
+        i += 1
 
-        lastRect = colorDetect(rect,frame)
+    return ret,frame
+    
+def detection(frame):
+    count = 0
+    size = (frame.shape[1] / frame_degree,frame.shape[0] / frame_degree)
+    frame = cv2.resize(frame,size)
+    pixels = frame.shape[0] * frame.shape[1]
+    
+    frameHSV = cv2.cvtColor(frame,cv2.cv.CV_BGR2HSV)
+    
+    frameHSV = cv2.inRange(frameHSV,lower,upper)
+    min_pixels = pixels / accuracy
+    
+    for content in frameHSV:
+        count += np.count_nonzero(content)
 
-        if len(lastRect) > 0:
-            for handRect in lastRect:
-                cv2.rectangle(frame, tuple((handRect[0],handRect[1])),tuple((handRect[0]+handRect[2],handRect[1]+handRect[2])), color, thickness=2)
-                center = handRect[0] + (handRect[2] / 2)
+    if count > min_pixels: 
+        return count
+    else:
+        return 0
 
-                if center > frame.shape[1] / 2:
-                    left += 1
-                else:
-                    right += 1
-
-        if left > right:
-	    print("left")
-            goLeft()
-	    playMusic()
-        elif left < right:
-	    print("right")
-            goRight()
-            playMusic()
-
-        display(frame)        
-        cv2.waitKey(1)
 
 setupGPIO()
-detection()
+while True:
+    left = 0
+    right = 0
+    ret,frame = frame_init()
+         
+    h = frame.shape[0]
+    w = frame.shape[1]
+
+    if ret == True:
+        frame_left = frame[0:h,w / 2:w]
+        frame_right = frame[0:h,0:w / 2]
+
+    display(cv2.inRange(cv2.cvtColor(cv2.medianBlur(cv2.resize(frame,(w / 2,h/2)),5),cv2.cv.CV_BGR2HSV),lower,upper))
+
+    left = detection(frame_left)
+    right = detection(frame_right)
+    
+    if left > right:
+        print("left")
+        goLeft()
+        playMusic()
+    elif left < right:
+        print("right")
+        goRight()
+        playMusic()
+        
+    cv2.waitKey(1)
