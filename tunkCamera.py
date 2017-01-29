@@ -1,12 +1,16 @@
 import cv2
 import numpy as np
 import controller as ctr
+import atexit
 
 frame_degree = 4
 smooth_degree = 5
 accuracy = 4
 lower = np.array([0,50,50])
 upper = np.array([15,255,255])
+
+def done_all():
+    ctr.releaseGPIO()
 
 def display(frame):
     cv2.imshow("frame",frame)
@@ -60,5 +64,5 @@ while True:
     elif left < right:
         print("right")
         ctr.goRight()
-        
+
     cv2.waitKey(1)
